@@ -37,6 +37,8 @@ func init() {
 
 // Load state from DB if Carrier was restarted
 func loadState() error {
+	msgMap := make(map[string]*Message)
+
 	// Load all topics
 	topics := LoadTopics()
 	for _, t := range topics {
@@ -46,12 +48,24 @@ func loadState() error {
 		// Load all subscribers for current Topic
 		subs := LoadSubscribers(t.Name)
 		for _, sub := range subs {
+			log.Printf("Loading Subscriber '%s' for Topic '%s' from database\n", sub.Addr, t.Name)
 			topicChan <- &Message{Type: SUB, TSCreated: sub.TSSubscribed, TopicName: t.Name, CreatorAddr: sub.Addr, Persisted: true}
 		}
 
 		// Put pending Messages in Topic channel
 		msgs := LoadPendingMessages(t.Name)
 		for _, msg := range msgs {
+			// Attempt to optimize memory: It's possible for the same Message to
+			// be loaded multiple times if multiple subscribers did not receive it.
+			// Only one instance of the Payload is needed - point all instances of
+			// this Message to the one Payload. Could do for other fields but probably won't gain much
+			log.Printf("Loading pending Message '%s' for Subscriber '%s' from database\n", msg.ID, msg.SubscriberAddr)
+			if originalMsg, ok := msgMap[msg.ID]; ok {
+				msg.Payload = originalMsg.Payload
+			} else {
+				msgMap[msg.ID] = msg
+			}
+
 			topicChan <- msg
 		}
 	}
