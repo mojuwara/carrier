@@ -123,6 +123,38 @@ func SavePendingMessage(sub *Subscriber, m *Message) error {
 	return nil
 }
 
+func SaveBulkPendingMessage(subs map[string]*Subscriber, m *Message) error {
+	tx, err := db.Begin()
+	if err != nil {
+		log.Println("ERROR: Beginning transaction", err)
+		return err
+	}
+
+	q := `insert into pending_msg(msg_id, subscriber_addr, ts_inserted) values(?, ?, ?)`
+	stmt, err := tx.Prepare(q)
+	if err != nil {
+		log.Println("ERROR: Preparing statement", err)
+		tx.Rollback()
+		return err
+	}
+
+	ts := time.Now()
+	for _, sub := range subs {
+		if _, err := stmt.Exec(m.ID, sub.Addr, ts); err != nil {
+			log.Println("ERROR: Inserting pending message", err)
+			tx.Rollback()
+			return err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Println("ERROR: committing Transaction", err)
+		return err
+	}
+	log.Printf("INFO: Saved bulk pending Message '%s' to all subscribers of Topic '%s' in database\n", m.ID, m.TopicName)
+	return nil
+}
+
 func DeletePendingMessage(sub *Subscriber, m *Message) error {
 	q := `delete from pending_msg where msg_id = ? and subscriber_addr = ?`
 	if _, err := db.Exec(q, m.ID, sub.Addr, time.Now()); err != nil {

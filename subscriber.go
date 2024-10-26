@@ -31,7 +31,6 @@ func StartSubscriberRoutine(sub *Subscriber, c MessageChan) {
 	pendingMsgs := &List{}
 	ticker := time.NewTicker(RETRY_INTERVAL)
 
-	// TODO: Handle chan being closed
 	for {
 		select {
 		case msg := <-c:
@@ -40,8 +39,14 @@ func StartSubscriberRoutine(sub *Subscriber, c MessageChan) {
 			}
 
 			// Deliver message to Subscriber, add to pendingMsgs if failed
-			if !pendingMsgs.Empty() || !deliverMsg(msg, sub.Addr) {
-				SavePendingMessage(sub, msg)
+			if !pendingMsgs.Empty() {
+				pendingMsgs.Push(msg)
+				break
+			}
+
+			if deliverMsg(msg, sub.Addr) {
+				DeletePendingMessage(sub, msg)
+			} else {
 				pendingMsgs.Push(msg)
 			}
 		case <-ticker.C:

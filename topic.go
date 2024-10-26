@@ -97,6 +97,7 @@ func processTopicMsg(msg *Message, subs map[string]*Subscriber) {
 		}
 
 		log.Printf("INFO: Processing 'Pub' message '%s' for subscribers of Topic '%s'\n", msg.ID, msg.TopicName)
+		SaveBulkPendingMessage(subs, msg)
 		for _, sub := range subs {
 			sub.Chan <- msg
 		}
